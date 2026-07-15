@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Bharatesh College of Computer Applications Belagavi</title>
+<style>
+body{font-family:Arial;background:#f4f4f4;margin:0;padding:0;text-align:center;}
+h1{background:#2c3e50;color:white;padding:10px;margin:0;}
+h3{margin:5px;color:#2c3e50;}
+.nav{background:#34495e;padding:10px;}
+.nav button{background:white;color:#2c3e50;margin:5px;padding:8px 15px;border:none;cursor:pointer;font-weight:bold;}
+.section{display:none;padding:20px;}
+.active{display:block;}
+input,select,button{padding:8px;margin:5px;}
+table{width:95%;margin:auto;margin-top:15px;border-collapse:collapse;}
+th,td{border:1px solid black;padding:8px;text-align:center;}
+th{background:#2c3e50;color:white;}
+#qrcode{margin-top:10px;}
+.qr-cell canvas{width:70px;height:70px;}
+</style>
+</head>
+<body>
+
+<h1>Bharatesh College of Computer Applications Belagavi</h1>
+<h3>Event Registration and Management System</h3>
+<div class="nav">
+<button onclick="showSection('adminAdd')">Admin - Add Event</button>
+<button onclick="showSection('studentReg')">Student Registration</button>
+<button onclick="showSection('adminDashboard')">Active dashboard</button>
+<button onclick="showDeletedHistory()">Deleted Registrations History</button>
+</div>
+
+<!-- Add Event -->
+<div id="adminAdd" class="section active">
+<h2>Add Event</h2>
+<input type="text" id="eventName" placeholder="Event Name">
+<input type="date" id="eventDate" placeholder="Event Date">
+<input type="text" id="eventVenue" placeholder="Event Venue">
+<input type="text" id="managerName" placeholder="Manager Name">
+<input type="text" id="managerPhone" placeholder="Manager Phone (10 digit)">
+<label>Last Registration Date:</label>
+<input type="date" id="lastRegDate">
+<label>Last Registration Delete Date (Admin only):</label>
+<input type="date" id="lastDeleteDate">
+<button onclick="addEvent()">Add Event</button>
+</div>
+
+<!-- Student Registration -->
+<div id="studentReg" class="section">
+<h2>Student Registration</h2>
+<input type="text" id="studentName" placeholder="Student Name">
+<input type="text" id="studentClass" placeholder="Class">
+<input type="text" id="studentPhone" placeholder="Phone Number">
+<select id="eventSelect"></select>
+<button onclick="register()">Register</button>
+<div id="qrcode"></div>
+<div id="welcomeMsg" style="margin-top:10px;font-size:18px;color:green;"></div>
+</div>
+
+<!-- Admin Dashboard -->
+<div id="adminDashboard" class="section">
+<h2>Active Events and Registrations</h2>
+
+<h3>Active Events</h3>
+<table>
+<tr>
+<th>Event Name</th>
+<th>Date</th>
+<th>Venue</th>
+<th>Manager Name</th>
+<th>Manager Phone</th>
+<th>Last Registration Date</th>
+<th>Last Registration Delete Date</th>
+<th>Delete Event</th>
+</tr>
+<tbody id="activeEventsTable"></tbody>
+</table>
+
+<h3>Active Registrations</h3>
+<table>
+<tr>
+<th>Name</th>
+<th>Class</th>
+<th>Phone</th>
+<th>Event</th>
+<th>Event Date</th>
+<th>QR Code</th>
+<th>Delete Registration</th>
+</tr>
+<tbody id="registrationTable"></tbody>
+</table>
+</div>
+
+<!-- Deleted Registrations History (Admin Only) -->
+<div id="deletedHistory" class="section">
+<h2>Deleted Registrations History (Admin Only)</h2>
+<button onclick="clearCompletedEventHistory()">Clear Completed Event History</button>
+<table>
+<tr>
+<th>Name</th>
+<th>Event</th>
+<th>Reason</th>
+<th>Deleted By</th>
+<th>Deleted On</th>
+<th>Delete</th>
+</tr>
+<tbody id="deleteHistoryTable"></tbody>
+</table>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+let events = JSON.parse(localStorage.getItem("events")) || [];
+let registrations = JSON.parse(localStorage.getItem("registrations")) || [];
+let deleteHistory = JSON.parse(localStorage.getItem("deleteHistory")) || [];
+let lastRegistration = JSON.parse(localStorage.getItem("lastRegistration")) || {};
+
+function showSection(id){
+document.querySelectorAll(".section").forEach(sec=>sec.classList.remove("active"));
+document.getElementById(id).classList.add("active");
+displayAdminDashboard();
+preFillLastRegistration();
+}
+
+function preFillLastRegistration(){
+document.getElementById("studentName").value = lastRegistration.name || "";
+document.getElementById("studentClass").value = lastRegistration.studentClass || "";
+document.getElementById("studentPhone").value = lastRegistration.phone || "";
+displayEvents();
+if(lastRegistration.event){
+document.getElementById("eventSelect").value = lastRegistration.event;
+}
+}
+
+function addEvent(){
+let password = prompt("Enter Admin Password:");
+if(password!=="admin123"){alert("Enter correct PASSWORD!");return;}
+let name=document.getElementById("eventName").value;
+let date=document.getElementById("eventDate").value;
+let venue=document.getElementById("eventVenue").value;
+let manager=document.getElementById("managerName").value;
+let phone=document.getElementById("managerPhone").value;
+let lastReg=document.getElementById("lastRegDate").value;
+let lastDel=document.getElementById("lastDeleteDate").value;
+if(name===""||date===""||venue===""||manager===""||phone===""||lastReg===""){alert("Fill all required fields!");return;}
+if(!/^[0-9]{10}$/.test(phone)){alert("Manager phone must be 10 digits!");return;}
+events.push({name,date,venue,manager,phone,lastReg,lastDelete:lastDel || null});
+localStorage.setItem("events",JSON.stringify(events));
+displayEvents();displayAdminDashboard();alert("Event Added Successfully!");
+
+}
+
+function displayEvents(){
+let select=document.getElementById("eventSelect");
+select.innerHTML="";
+events.forEach(e=>{
+select.innerHTML+=`<option value="${e.name}">${e.name}</option>`;
+});
+}
+
+function register(){
+document.getElementById("qrcode").innerHTML="";
+document.getElementById("welcomeMsg").innerHTML="";
+let name=document.getElementById("studentName").value;
+let studentClass=document.getElementById("studentClass").value;
+let phone=document.getElementById("studentPhone").value;
+let event=document.getElementById("eventSelect").value;
+if(name===""||studentClass===""||phone===""){alert("Fill all fields!");return;}
+if(!/^[0-9]{10}$/.test(phone)){alert("Phone must be 10 digits!");return;}
+
+let selectedEvent = events.find(e=>e.name===event);
+if(selectedEvent){
+let lastDate = new Date(selectedEvent.lastReg);
+let today = new Date(); today.setHours(0,0,0,0);
+if(today > lastDate){alert("Registration closed for this event!"); return;}
+}
+
+let already=registrations.find(r=>r.name===name && r.event===event);
+if(already){alert("Already registered for this event!");return;}
+registrations.push({name,studentClass,phone,event});
+localStorage.setItem("registrations",JSON.stringify(registrations));
+
+lastRegistration={name,studentClass,phone,event};
+localStorage.setItem("lastRegistration",JSON.stringify(lastRegistration));
+
+displayAdminDashboard();
+alert("Registration Successful!");
+
+let qrContainer=document.getElementById("qrcode");
+qrContainer.innerHTML="";
+let qrText=`Name:${name}\nEvent:${event}\nClass:${studentClass}\nPhone:${phone}\nStatus:Successful`;
+new QRCode(qrContainer,{text:qrText,width:150,height:150});
+document.getElementById("welcomeMsg").innerHTML="Registration Successful 🙏";
+}
+
+function displayAdminDashboard(){
+let eventsTable=document.getElementById("activeEventsTable");
+eventsTable.innerHTML="";
+events.forEach((e,index)=>{
+let row=document.createElement("tr");
+row.innerHTML=`<td>${e.name}</td><td>${e.date}</td><td>${e.venue}</td><td>${e.manager}</td><td>${e.phone}</td><td>${e.lastReg}</td><td>${e.lastDelete || '-'}</td>
+<td><button onclick="deleteEvent(${index})">Delete</button></td>`;
+eventsTable.appendChild(row);
+});
+
+let table=document.getElementById("registrationTable");
+table.innerHTML="";
+registrations.forEach((r,index)=>{
+let eventObj=events.find(e=>e.name===r.event);
+let eventDate = eventObj ? eventObj.date : "-";
+let row=document.createElement("tr");
+row.innerHTML=`
+<td>${r.name}</td>
+<td>${r.studentClass}</td>
+<td>${r.phone}</td>
+<td>${r.event}</td>
+<td>${eventDate}</td>
+<td class="qr-cell"><div id="qr${index}"></div><br>
+<button onclick="downloadQR('qr${index}','${r.name}')">Download</button></td>
+<td><button onclick="deleteRegistration('${r.name}','${r.event}')">Delete</button></td>`;
+table.appendChild(row);
+new QRCode(document.getElementById(`qr${index}`),{text:`Name:${r.name}\nEvent:${r.event}\nClass:${r.studentClass}\nPhone:${r.phone}\nStatus:Successful`,width:70,height:70});
+});
+displayDeletedHistory();
+}
+
+// Delete Event
+function deleteEvent(index){
+let password = prompt("Enter Admin Password:");
+if(password!=="admin123"){alert("Access Denied!");return;}
+let eventName = events[index].name;
+// Remove event registrations first
+registrations = registrations.filter(r=>r.event!==eventName);
+events.splice(index,1);
+localStorage.setItem("events",JSON.stringify(events));
+localStorage.setItem("registrations",JSON.stringify(registrations));
+displayAdminDashboard();
+alert("Event deleted successfully!");
+}
+
+function downloadQR(qrId,name){
+let qrDiv=document.getElementById(qrId).querySelector("canvas");
+if(!qrDiv){alert("QR not found");return;}
+let image=qrDiv.toDataURL("image/png");
+let a=document.createElement("a");
+a.href=image;
+a.download=name+"_QR.png";
+a.click();
+}
+
+function deleteRegistration(name,event){
+let reason=prompt("Enter reason for deletion:");
+if(!reason){alert("Deletion cancelled, reason required!");return;}
+let password=prompt("Enter Admin Password:");
+if(password!=="admin123"){alert("Access Denied!");return;}
+let deletedBy="Admin";
+let deletedOn=new Date().toLocaleString();
+let removed=registrations.find(r=>r.name===name && r.event===event);
+if(!removed){alert("Registration not found!");return;}
+registrations=registrations.filter(r=>!(r.name===name && r.event===event));
+deleteHistory.push({name:event?removed.name:"",event:event,reason,deletedBy,deletedOn});
+localStorage.setItem("registrations",JSON.stringify(registrations));
+localStorage.setItem("deleteHistory",JSON.stringify(deleteHistory));
+displayAdminDashboard();
+alert("Registration deleted and logged in history.");
+}
+
+function showDeletedHistory(){
+let password=prompt("Enter Admin Password:");
+if(password!=="admin123"){alert("Access Denied!"); return;}
+document.querySelectorAll(".section").forEach(sec=>sec.classList.remove("active"));
+document.getElementById("deletedHistory").classList.add("active");
+displayDeletedHistory();
+}
+
+function displayDeletedHistory(){
+let table=document.getElementById("deleteHistoryTable");
+table.innerHTML="";
+deleteHistory.forEach(d=>{
+table.innerHTML+=`<tr>
+<td>${d.name}</td>
+<td>${d.event}</td>
+<td>${d.reason}</td>
+<td>${d.deletedBy}</td>
+<td>${d.deletedOn}</td>
+<td><button onclick="deleteFromHistory('${d.name}','${d.event}')">Delete</button></td>
+</tr>`;
+});
+}
+
+function deleteFromHistory(name,event){
+let password=prompt("Enter Admin Password:");
+if(password!=="admin123"){alert("Access Denied!");return;}
+deleteHistory=deleteHistory.filter(d=>!(d.name===name && d.event===event));
+localStorage.setItem("deleteHistory",JSON.stringify(deleteHistory));
+displayDeletedHistory();displayAdminDashboard();
+alert("Deleted from history!");
+}
+
+function clearCompletedEventHistory(){
+let password=prompt("Enter Admin Password:");
+if(password!=="admin123"){alert("Access Denied!");return;}
+let today=new Date();
+let removedCount=0;
+deleteHistory=deleteHistory.filter(d=>{
+let eventObj=events.find(e=>e.name===d.event);
+let eventDate = eventObj ? new Date(eventObj.date) : new Date(d.deletedOn);
+if(eventDate<today){removedCount++; return false;} return true;
+});
+localStorage.setItem("deleteHistory",JSON.stringify(deleteHistory));
+displayDeletedHistory();
+alert(removedCount+" completed event history removed!");
+}
+
+displayEvents();
+displayAdminDashboard();
+preFillLastRegistration();
+</script>
+
+<footer style="background:#2c3e50;color:white;text-align:center;padding:15px;margin-top:30px;">
+    <p>© 2026 Bharatesh College of Computer Applications Belagavi</p>
+    <p>Developed by <b>Gangotri Patil</b></p>
+</footer>
+
+</body>
+</html>
